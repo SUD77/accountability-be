@@ -1,10 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,10 +7,68 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/* ---------- MODELS ---------- */
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique @db.Text
+  timezone  String   @default("Asia/Kolkata") @db.Text
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+
+  streaks   Streak[]
+
+  @@map("users")
+}
+
+model Streak {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid             @map("user_id")
+  name      String   @db.Text
+  startDate DateTime @db.Date             @map("start_date")
+  endDate   DateTime @db.Date             @map("end_date")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals  Goal[]
+
+  @@index([userId], map: "streaks_user_id_idx")
+  @@map("streaks")
+}
+
+model Goal {
+  id            String   @id @default(uuid()) @db.Uuid
+  streakId      String   @db.Uuid             @map("streak_id")
+  name          String   @db.Text
+  // Keep TEXT in DB (not a PG enum) to match your spec; we'll add a CHECK via raw SQL in the migration.
+  type          String   @db.Text
+  unit          String?  @db.Text
+  perDayTarget  Decimal? @db.Decimal(10, 2)   @map("per_day_target")
+  createdAt     DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+
+  streak      Streak    @relation(fields: [streakId], references: [id], onDelete: Cascade)
+  logEntries  LogEntry[]
+
+  @@index([streakId], map: "goals_streak_id_idx")
+  @@map("goals")
+}
+
+model LogEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  goalId    String   @db.Uuid             @map("goal_id")
+  localDate DateTime @db.Date             @map("local_date")
+  value     Decimal? @db.Decimal(10, 2)
+  done      Boolean?
+  // Enforce ≤ 280 at DB level using VARCHAR(280)
+  note      String?  @db.VarChar(280)
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  editedAt  DateTime? @db.Timestamptz(6)                @map("edited_at")
+
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, localDate], map: "log_entries_goal_id_local_date_key")
+  @@index([goalId], map: "log_entries_goal_id_idx")
+  @@map("log_entries")
 }
