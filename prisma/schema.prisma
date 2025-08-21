@@ -10,16 +10,22 @@ datasource db {
 /* ---------- MODELS ---------- */
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique @db.Text
-  timezone  String   @default("Asia/Kolkata") @db.Text
-  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique @db.Text
+  // NEW FIELDS (nullable for a safe, first migration)
+  passwordHash  String?  @map("password_hash") @db.Text
+  displayName   String?  @map("display_name")  @db.Text
+  timezone      String   @default("Asia/Kolkata") @db.Text
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(6)
 
-  streaks   Streak[]
+  createdAt     DateTime @default(now())        @db.Timestamptz(6) @map("created_at")
+  updatedAt     DateTime @updatedAt             @db.Timestamptz(6) @map("updated_at")
+
+  streaks       Streak[]
 
   @@map("users")
 }
+
 
 model Streak {
   id        String   @id @default(uuid()) @db.Uuid
