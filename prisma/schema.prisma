@@ -1,3 +1,4 @@
+// ---------- GENERATOR & DATASOURCE ----------
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,74 +8,218 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ---------- MODELS ---------- */
+/* ===========================================================
+   =======================  ENUMS  ===========================
+   =========================================================== */
 
+// Goal type is kept as a real enum (robust, clear)
+enum GoalType {
+  binary
+  count
+}
+
+// Group visibility for discovery
+enum GroupVisibility {
+  public
+  private
+}
+
+// Group lifecycle (you can still compute from dates; storing helps filters)
+enum GroupStatus {
+  draft
+  scheduled
+  active
+  completed
+  cancelled
+}
+
+// Membership role (owner is also a member)
+enum MembershipRole {
+  owner
+  member
+}
+
+// Membership status (MVP keeps it simple)
+enum MembershipStatus {
+  active
+  left
+  removed
+}
+
+// Invite state
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+/* ===========================================================
+   =======================  MODELS  ==========================
+   =========================================================== */
+
+// Users now support auth fields; we keep your defaults and mappings.
 model User {
-  id            String   @id @default(uuid()) @db.Uuid
-  email         String   @unique @db.Text
-  // NEW FIELDS (nullable for a safe, first migration)
-  passwordHash  String?  @map("password_hash") @db.Text
-  displayName   String?  @map("display_name")  @db.Text
-  timezone      String   @default("Asia/Kolkata") @db.Text
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.Text
+  passwordHash  String?   @map("password_hash") @db.Text     // nullable now; can make required later
+  displayName   String?   @map("display_name")  @db.Text
+  timezone      String    @default("Asia/Kolkata") @db.Text
   lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(6)
 
-  createdAt     DateTime @default(now())        @db.Timestamptz(6) @map("created_at")
-  updatedAt     DateTime @updatedAt             @db.Timestamptz(6) @map("updated_at")
+  createdAt     DateTime  @default(now())        @db.Timestamptz(6) @map("created_at")
+  updatedAt     DateTime  @updatedAt             @db.Timestamptz(6) @map("updated_at")
 
-  streaks       Streak[]
+  // Relations
+  groupsOwned   StreakGroup[] @relation("GroupOwner")             // groups this user owns
+  memberships   GroupMembership[]                                  // groups this user is a member of
+  invitesSent   Invite[]       @relation("InviteInviter")          // invites this user sent
+  invitesAccepted Invite[]     @relation("InviteAcceptedBy")       // invites this user accepted (optional)
 
   @@map("users")
 }
 
+// Time-boxed container multiple people join for accountability.
+// Replaces your previous `Streak` model with a more explicit name.
+model StreakGroup {
+  id          String          @id @default(uuid()) @db.Uuid
+  ownerId     String          @db.Uuid             @map("owner_id")
+  name        String          @db.Text
+  description String?         @db.Text
 
-model Streak {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid             @map("user_id")
-  name      String   @db.Text
-  startDate DateTime @db.Date             @map("start_date")
-  endDate   DateTime @db.Date             @map("end_date")
-  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+  startDate   DateTime        @db.Date             @map("start_date")
+  endDate     DateTime        @db.Date             @map("end_date")
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goals  Goal[]
+  // You can set this at creation and also compute it at runtime as needed.
+  status      GroupStatus     @default(scheduled)
+  visibility  GroupVisibility @default(private)
 
-  @@index([userId], map: "streaks_user_id_idx")
-  @@map("streaks")
+  createdAt   DateTime        @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt   DateTime        @updatedAt      @db.Timestamptz(6) @map("updated_at")
+
+  // Relations
+  owner       User            @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships GroupMembership[]
+  invites     Invite[]
+
+  @@index([ownerId], map: "streak_groups_owner_id_idx")
+  @@map("streak_groups")
 }
 
+// Join table tying a user to a group. Goals are attached to a membership.
+model GroupMembership {
+  id              String         @id @default(uuid()) @db.Uuid
+  groupId         String         @db.Uuid             @map("group_id")
+  userId          String         @db.Uuid             @map("user_id")
+  role            MembershipRole @default(member)
+  status          MembershipStatus @default(active)
+  memberTimezone  String         @map("member_timezone") @db.Text  // snapshot of user's timezone at join time
+
+  joinedAt        DateTime       @default(now()) @db.Timestamptz(6) @map("joined_at")
+  leftAt          DateTime?      @db.Timestamptz(6)                 @map("left_at")
+
+  // Relations
+  group           StreakGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals           Goal[]
+
+  @@unique([groupId, userId], map: "group_memberships_group_id_user_id_key")
+  @@index([groupId], map: "group_memberships_group_id_idx")
+  @@index([userId], map: "group_memberships_user_id_idx")
+  @@map("group_memberships")
+}
+
+// Email-based invites to join a group. Accept flows will create a membership.
+model Invite {
+  id               String        @id @default(uuid()) @db.Uuid
+  groupId          String        @db.Uuid             @map("group_id")
+  inviterId        String        @db.Uuid             @map("inviter_id")
+  email            String        @db.Text
+  token            String        @unique @db.Text     // one-time token, unique
+  expiresAt        DateTime      @db.Timestamptz(6)   @map("expires_at")
+  status           InviteStatus  @default(pending)
+  sentAt           DateTime      @default(now()) @db.Timestamptz(6) @map("sent_at")
+  acceptedByUserId String?       @db.Uuid             @map("accepted_by_user_id")
+  acceptedAt       DateTime?     @db.Timestamptz(6)   @map("accepted_at")
+
+  // Relations
+  group            StreakGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter          User          @relation("InviteInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  acceptedByUser   User?         @relation("InviteAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([groupId], map: "invites_group_id_idx")
+  @@index([email], map: "invites_email_idx")
+  @@map("invites")
+}
+
+// Personal goal inside a specific group membership (NOT global to user).
+// Moved from streak-based FK to membership-based FK.
 model Goal {
-  id            String   @id @default(uuid()) @db.Uuid
-  streakId      String   @db.Uuid             @map("streak_id")
-  name          String   @db.Text
-  // Keep TEXT in DB (not a PG enum) to match your spec; we'll add a CHECK via raw SQL in the migration.
-  type          String   @db.Text
-  unit          String?  @db.Text
-  perDayTarget  Decimal? @db.Decimal(10, 2)   @map("per_day_target")
-  createdAt     DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
-  updatedAt     DateTime @updatedAt @db.Timestamptz(6)     @map("updated_at")
+  id            String     @id @default(uuid()) @db.Uuid
+  membershipId  String     @db.Uuid             @map("membership_id")
 
-  streak      Streak    @relation(fields: [streakId], references: [id], onDelete: Cascade)
-  logEntries  LogEntry[]
+  // Keep your friendly name/title for the goal
+  name          String     @db.Text
 
-  @@index([streakId], map: "goals_streak_id_idx")
+  // Enum is robust; DB enum helps avoid invalid strings.
+  type          GoalType
+
+  // For count goals: unit + per_day_target are meaningful.
+  // We use DECIMAL(10,2) for flexibility (km, hours, etc.). If you prefer INT-only, we can switch.
+  unit          String?    @db.Text
+  perDayTarget  Decimal?   @db.Decimal(10, 2)   @map("per_day_target")
+
+  createdAt     DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt     DateTime   @updatedAt      @db.Timestamptz(6) @map("updated_at")
+
+  // Relations
+  membership    GroupMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  logEntries    LogEntry[]
+
+  @@index([membershipId], map: "goals_membership_id_idx")
   @@map("goals")
 }
 
+// Daily log entry for a goal; one row per local calendar day.
+// `local_date` is stored as a DATE (no time component).
 model LogEntry {
-  id        String   @id @default(uuid()) @db.Uuid
-  goalId    String   @db.Uuid             @map("goal_id")
-  localDate DateTime @db.Date             @map("local_date")
-  value     Decimal? @db.Decimal(10, 2)
-  done      Boolean?
-  // Enforce ≤ 280 at DB level using VARCHAR(280)
-  note      String?  @db.VarChar(280)
-  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
-  editedAt  DateTime? @db.Timestamptz(6)                @map("edited_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  goalId     String    @db.Uuid             @map("goal_id")
+  localDate  DateTime  @db.Date             @map("local_date")
 
-  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  // For count goals: set `value` (>= 0) and leave `done` NULL
+  value      Decimal?  @db.Decimal(10, 2)
 
+  // For binary goals: set `done` (true/false) and leave `value` NULL
+  done       Boolean?
+
+  // Optional note, enforced at 280 chars in DB
+  note       String?   @db.VarChar(280)
+
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt  DateTime  @updatedAt      @db.Timestamptz(6) @map("updated_at")
+
+  // Relations
+  goal       Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  // Exactly one row per goal per local day
   @@unique([goalId, localDate], map: "log_entries_goal_id_local_date_key")
   @@index([goalId], map: "log_entries_goal_id_idx")
   @@map("log_entries")
+}
+
+// Optional, but handy for debugging and admin views.
+// Log high-level events without overengineering.
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String?  @db.Uuid             @map("actor_user_id")
+  entityType   String   @db.Text             @map("entity_type") // e.g., "group" | "goal" | "log"
+  entityId     String   @db.Uuid             @map("entity_id")
+  action       String   @db.Text                              // e.g., "create", "update", "delete"
+  metadata     Json?                                                 // free-form details
+  occurredAt   DateTime @default(now()) @db.Timestamptz(6) @map("occurred_at")
+
+  // (No strict FKs to avoid blocking writes; you can add soft refs if desired)
+  @@index([entityType, entityId], map: "audit_events_entity_idx")
+  @@map("audit_events")
 }
