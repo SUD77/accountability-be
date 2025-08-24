@@ -1,4 +1,3 @@
-// src/types/express.d.ts
 import type { AuthUser } from "../middleware/auth";
 
 declare global {
