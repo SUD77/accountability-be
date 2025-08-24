@@ -1,0 +1,86 @@
+# Postman-friendly cURL examples for Auth
+# Set these variables in Postman (or replace inline):
+#   {{BASE_URL}}   e.g., http://localhost:3000
+#   {{EMAIL}}      your email
+#   {{PASSWORD}}   your password
+#   {{DISPLAY_NAME}} (optional)
+#   {{TIMEZONE}}   e.g., Asia/Kolkata
+#   {{TOKEN}}      paste token from signup/login response
+
+### SIGNUP (returns { token, user })
+curl --location '{{BASE_URL}}/auth/signup' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "email": "{{EMAIL}}",
+    "password": "{{PASSWORD}}",
+    "display_name": "{{DISPLAY_NAME}}",
+    "timezone": "{{TIMEZONE}}"
+  }'
+
+### LOGIN (returns { token, user })
+curl --location '{{BASE_URL}}/auth/login' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "email": "{{EMAIL}}",
+    "password": "{{PASSWORD}}"
+  }'
+
+### ME (requires Bearer token)
+curl --location '{{BASE_URL}}/me' \
+  --header 'Authorization: Bearer {{TOKEN}}'
+
+### UPDATE ME (optional: change display_name / timezone)
+curl --location --request PATCH '{{BASE_URL}}/me' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer {{TOKEN}}' \
+  --data '{
+    "display_name": "New Name",
+    "timezone": "Asia/Kolkata"
+  }'
+
+### LOGOUT (stateless; client just drops token)
+curl --location --request POST '{{BASE_URL}}/auth/logout' \
+  --header 'Authorization: Bearer {{TOKEN}}'
+
+
+
+----------------------------------------------------------------------------------
+
+##### WITH DATA ######
+
+
+# ===== AUTH: SIGNUP (returns { token, user }) =====
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "alice@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Alice",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# ===== AUTH: LOGIN (returns { token, user }) =====
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "alice@example.com",
+    "password": "Passw0rd!23"
+  }'
+
+# ===== AUTH: ME (requires Bearer token) =====
+# Replace <TOKEN> with the token you got from signup/login
+curl --location http://localhost:3000/me \
+  --header "Authorization: Bearer <TOKEN>"
+
+# ===== AUTH: UPDATE ME (optional) =====
+curl --location --request PATCH http://localhost:3000/me \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <TOKEN>" \
+  --data-raw '{
+    "display_name": "Alice J",
+    "timezone": "UTC"
+  }'
+
+# ===== AUTH: LOGOUT (stateless; client just drops token) =====
+curl --location --request POST http://localhost:3000/auth/logout \
+  --header "Authorization: Bearer <TOKEN>"
