@@ -10,6 +10,9 @@ import authRouter from "./routes/auth";
 import { errorHandler } from "./middleware/errorHandler";
 import groupsRouter from "./routes/groupsRouter";
 import membershipsRouter from "./routes/membershipRouter";
+import invitesRouter from "./routes/invitesRouter";
+
+
 
 dotenv.config();
 
@@ -26,6 +29,7 @@ app.use(goalRouter);
 app.use(logsRouter);
 app.use(groupsRouter);
 app.use(membershipsRouter);
+app.use(invitesRouter);
 
 // error handler LAST
 app.use(errorHandler);

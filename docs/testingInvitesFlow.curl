@@ -1,0 +1,97 @@
+# ============================================
+# TESTING INVITES FLOW (Private Group)
+# Base URL: http://localhost:3000
+# ============================================
+
+# 0) (Optional sanity) Private groups cannot be joined without an invite.
+#    We'll prove this after we create the private group.
+
+# 1) SIGNUP — Owner (Olivia)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "olivia@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Olivia Owner",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 2) SIGNUP — Invitee (Ivan)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "ivan@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Ivan Invitee",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 3) LOGIN — Owner → copy token as <OWNER_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "olivia@example.com", "password": "Passw0rd!23" }'
+
+# 4) LOGIN — Invitee → copy token as <INVITEE_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "ivan@example.com", "password": "Passw0rd!23" }'
+
+# 5) OWNER: Create a PRIVATE group → note "id" as <GROUP_ID>
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <OWNER_TOKEN>" \
+  --data-raw '{
+    "name": "Private Invite Test",
+    "description": "Invite-only QA group",
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "visibility": "private"
+  }'
+
+# 6) (Optional) INVITEE: Try to JOIN private group (should be 403 "Private group: join via invite")
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/join \
+  --header "Authorization: Bearer <INVITEE_TOKEN>"
+
+# 7) OWNER: Create an invite for ivan@example.com
+#    Response returns the full invite object including "id" (<INVITE_ID>) and "token" (<INVITE_TOKEN>)
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/invites \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <OWNER_TOKEN>" \
+  --data-raw '{ "email": "ivan@example.com" }'
+
+# 8) (Optional) OWNER: List invites in the group (see statuses/tokens)
+curl --location http://localhost:3000/groups/<GROUP_ID>/invites \
+  --header "Authorization: Bearer <OWNER_TOKEN>"
+
+# 9) INVITEE: Accept the invite by token → becomes member
+curl --location --request POST http://localhost:3000/invites/accept \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <INVITEE_TOKEN>" \
+  --data-raw '{ "token": "<INVITE_TOKEN>" }'
+
+# 10) OWNER: Verify members now include Ivan
+curl --location http://localhost:3000/groups/<GROUP_ID>/members \
+  --header "Authorization: Bearer <OWNER_TOKEN>"
+
+# 11) Negative — Re-accept the same token (should return 400 "Invalid or expired invite")
+curl --location --request POST http://localhost:3000/invites/accept \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <INVITEE_TOKEN>" \
+  --data-raw '{ "token": "<INVITE_TOKEN>" }'
+
+# 12) OWNER: Create another invite (for a different email) to test revoke
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/invites \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <OWNER_TOKEN>" \
+  --data-raw '{ "email": "jane@example.com" }'
+#    → Copy "id" as <INVITE_ID_2> and "token" as <INVITE_TOKEN_2> from response.
+
+# 13) OWNER: Revoke that pending invite
+curl --location --request DELETE http://localhost:3000/invites/<INVITE_ID_2> \
+  --header "Authorization: Bearer <OWNER_TOKEN>"
+
+# 14) Negative — Try accepting a revoked invite (should return 400 "Invalid or expired invite")
+curl --location --request POST http://localhost:3000/invites/accept \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <INVITEE_TOKEN>" \
+  --data-raw '{ "token": "<INVITE_TOKEN_2>" }'
