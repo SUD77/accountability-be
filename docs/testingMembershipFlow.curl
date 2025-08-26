@@ -1,0 +1,110 @@
+# Testing Membership Flow (Auth + Groups + Memberships)
+# Base URL: http://localhost:3000
+# Replace placeholders like <ALICE_TOKEN>, <BOB_TOKEN>, <GROUP_ID>, <BOB_USER_ID>, <PRIVATE_GROUP_ID>
+
+# 1) SIGNUP — Alice (owner)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "alice@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Alice",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 1) SIGNUP — Bob (member)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "bob@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Bob",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 2) LOGIN — Alice → copy token as <ALICE_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "alice@example.com", "password": "Passw0rd!23" }'
+
+# 2) LOGIN — Bob → copy token as <BOB_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "bob@example.com", "password": "Passw0rd!23" }'
+
+# 3) Alice creates a PUBLIC group → note "id" as <GROUP_ID>
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Open 30-Day Sprint",
+    "description": "Public accountability test group",
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "visibility": "public"
+  }'
+
+# 4) LIST (mine) — Alice (should include new group)
+curl --location "http://localhost:3000/groups?scope=mine" \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 4) LIST (public) — Bob (should include the group)
+curl --location "http://localhost:3000/groups?scope=public" \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 5) Bob JOINs the group
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/join \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 6) MEMBERS — Alice lists members
+curl --location http://localhost:3000/groups/<GROUP_ID>/members \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 6) MEMBERS — Bob lists members
+curl --location http://localhost:3000/groups/<GROUP_ID>/members \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 7) JOIN again (idempotent) — Bob
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/join \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 8) LEAVE — Bob
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/leave \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 9) MEMBERS — Alice lists again (Bob should be left/absent)
+curl --location http://localhost:3000/groups/<GROUP_ID>/members \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 10) RE-JOIN — Bob (reactivates)
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/join \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 11) OWNER REMOVES Bob — need <BOB_USER_ID> from members list (user.id or userId)
+curl --location --request DELETE http://localhost:3000/groups/<GROUP_ID>/members/<BOB_USER_ID> \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 12a) NEGATIVE — Bob tries to remove someone (should 403)
+curl --location --request DELETE http://localhost:3000/groups/<GROUP_ID>/members/<BOB_USER_ID> \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 12b) NEGATIVE — Alice (owner) tries to leave (should 400)
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/leave \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 13) PRIVATE group join blocked — create private, then Bob attempts join
+# 13a) Alice creates PRIVATE group → note "id" as <PRIVATE_GROUP_ID>
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Private QA Group",
+    "description": "Private test",
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "visibility": "private"
+  }'
+
+# 13b) Bob attempts to JOIN private group (should 403 "Private group: join via invite")
+curl --location --request POST http://localhost:3000/groups/<PRIVATE_GROUP_ID>/join \
+  --header "Authorization: Bearer <BOB_TOKEN>"
