@@ -1,0 +1,46 @@
+# ===== GROUPS: CREATE (private) =====
+# Creates a private group and auto-adds you as owner (returns { id, owner_membership_id, ... }).
+# Replace <TOKEN> with a real JWT from signup/login.
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <TOKEN>" \
+  --data-raw '{
+    "name": "September Focus",
+    "description": "Read daily and run 3x/week",
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "visibility": "private"
+  }'
+
+# ===== GROUPS: CREATE (public) =====
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <TOKEN>" \
+  --data-raw '{
+    "name": "Open 30-Day Sprint",
+    "description": "Public accountability group",
+    "start_date": "2025-09-05",
+    "end_date": "2025-10-04",
+    "visibility": "public"
+  }'
+
+# ===== GROUPS: LIST (mine) =====
+# Lists groups where you are a member.
+curl --location "http://localhost:3000/groups?scope=mine" \
+  --header "Authorization: Bearer <TOKEN>"
+
+# ===== GROUPS: LIST (mine + status filter) =====
+# status = upcoming | active | completed
+curl --location "http://localhost:3000/groups?scope=mine&status=upcoming" \
+  --header "Authorization: Bearer <TOKEN>"
+
+# ===== GROUPS: LIST (public) =====
+# Lists all public groups (authentication required).
+curl --location "http://localhost:3000/groups?scope=public" \
+  --header "Authorization: Bearer <TOKEN>"
+
+# ===== GROUPS: GET DETAILS =====
+# Replace <GROUP_ID> with an id from the list/create responses.
+# Private groups return 404 if you are not a member.
+curl --location http://localhost:3000/groups/<GROUP_ID> \
+  --header "Authorization: Bearer <TOKEN>"

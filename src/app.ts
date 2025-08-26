@@ -6,10 +6,9 @@ import usersRouter from "./routes/usersRouter";
 import streaksRouter from "./routes/streaksRouter";
 import goalRouter from "./routes/goalsRouter";
 import logsRouter from "./routes/logsRouter";
-
 import authRouter from "./routes/auth"; 
-
 import { errorHandler } from "./middleware/errorHandler";
+import groupsRouter from "./routes/groupsRouter";
 
 dotenv.config();
 
@@ -24,6 +23,7 @@ app.use(usersRouter);
 app.use(streaksRouter);
 app.use(goalRouter);
 app.use(logsRouter);
+app.use(groupsRouter);
 
 // error handler LAST
 app.use(errorHandler);
