@@ -1,0 +1,101 @@
+# ============================================
+# TESTING LOGS FLOW (continues after goals)
+# Base URL: http://localhost:3000
+# ============================================
+
+# 1) UPSERT — Binary goal (Alice): mark done on 2025-09-01
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_BINARY_GOAL_ID>",
+    "local_date": "2025-09-01",
+    "done": true,
+    "note": "Day 1 meditation ✅"
+  }'
+
+# 2) UPSERT — Binary goal (Alice): change same day to false (idempotent overwrite)
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_BINARY_GOAL_ID>",
+    "local_date": "2025-09-01",
+    "done": false,
+    "note": "Missed today"
+  }'
+
+# 3) UPSERT — Count goal (Alice): 15 pages on 2025-09-01
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_COUNT_GOAL_ID>",
+    "local_date": "2025-09-01",
+    "value": 15,
+    "note": "Evening reading"
+  }'
+
+# 4) UPSERT — Count goal (Alice): 25 pages on 2025-09-02
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_COUNT_GOAL_ID>",
+    "local_date": "2025-09-02",
+    "value": 25
+  }'
+
+# 5) GET — Logs for Alice's binary goal (full range)
+curl --location http://localhost:3000/goals/<ALICE_BINARY_GOAL_ID>/log-entries \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 6) GET — Logs for Alice's count goal (date range)
+curl --location "http://localhost:3000/goals/<ALICE_COUNT_GOAL_ID>/log-entries?from=2025-09-01&to=2025-09-15" \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 7) READ — Bob views Alice's count goal logs (allowed: same group)
+curl --location "http://localhost:3000/goals/<ALICE_COUNT_GOAL_ID>/log-entries?from=2025-09-01&to=2025-09-15" \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# -------- Optional NEGATIVE checks --------
+
+# N1) Invalid field mix: binary goal with 'value' → should 400
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_BINARY_GOAL_ID>",
+    "local_date": "2025-09-02",
+    "value": 1
+  }'
+
+# N2) Invalid field mix: count goal with 'done' → should 400
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_COUNT_GOAL_ID>",
+    "local_date": "2025-09-03",
+    "done": true
+  }'
+
+# N3) Out-of-window date (before group start) → should 400
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_COUNT_GOAL_ID>",
+    "local_date": "2025-08-31",
+    "value": 10
+  }'
+
+# N4) Non-owner tries to upsert Alice's goal (Bob) → should 403
+curl --location --request POST http://localhost:3000/log-entries \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <BOB_TOKEN>" \
+  --data-raw '{
+    "goalId": "<ALICE_COUNT_GOAL_ID>",
+    "local_date": "2025-09-04",
+    "value": 10
+  }'
