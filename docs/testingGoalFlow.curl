@@ -1,0 +1,133 @@
+# ============================================
+# TESTING GOALS FLOW (Groups + Memberships + Goals)
+# Base URL: http://localhost:3000
+# ============================================
+# Tip: If alice/bob already exist, skip signup and just login.
+
+# 1) SIGNUP — Alice (owner)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "alice@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Alice",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 1) SIGNUP — Bob (member)
+curl --location http://localhost:3000/auth/signup \
+  --header "Content-Type: application/json" \
+  --data-raw '{
+    "email": "bob@example.com",
+    "password": "Passw0rd!23",
+    "display_name": "Bob",
+    "timezone": "Asia/Kolkata"
+  }'
+
+# 2) LOGIN — Alice → copy token as <ALICE_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "alice@example.com", "password": "Passw0rd!23" }'
+
+# 2) LOGIN — Bob → copy token as <BOB_TOKEN>
+curl --location http://localhost:3000/auth/login \
+  --header "Content-Type: application/json" \
+  --data-raw '{ "email": "bob@example.com", "password": "Passw0rd!23" }'
+
+# 3) Alice creates a PUBLIC group → note "id" as <GROUP_ID> and "owner_membership_id" as <ALICE_MEMBERSHIP_ID>
+curl --location http://localhost:3000/groups \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Goals Test Group",
+    "description": "Testing goals flow",
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "visibility": "public"
+  }'
+
+# 4) Bob joins the group → copy membership "id" as <BOB_MEMBERSHIP_ID>
+curl --location --request POST http://localhost:3000/groups/<GROUP_ID>/join \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 5) Alice creates a BINARY goal under her membership
+#    Expect 201 with the new goal (copy "id" as <ALICE_BINARY_GOAL_ID>)
+curl --location --request POST http://localhost:3000/memberships/<ALICE_MEMBERSHIP_ID>/goals \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Meditate daily",
+    "type": "binary"
+  }'
+
+# 6) Alice creates a COUNT goal under her membership
+#    Expect 201 with the new goal (copy "id" as <ALICE_COUNT_GOAL_ID>)
+curl --location --request POST http://localhost:3000/memberships/<ALICE_MEMBERSHIP_ID>/goals \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Read pages",
+    "type": "count",
+    "unit": "pages",
+    "per_day_target": 20
+  }'
+
+# 7) List Alice's goals by membership (Alice)
+curl --location http://localhost:3000/memberships/<ALICE_MEMBERSHIP_ID>/goals \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 8) List Alice's goals by membership (Bob — allowed since he’s in same group)
+curl --location http://localhost:3000/memberships/<ALICE_MEMBERSHIP_ID>/goals \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 9) List ALL goals in the group (as Bob)
+curl --location "http://localhost:3000/groups/<GROUP_ID>/goals" \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 10) List goals in the group filtered by member (Alice only)
+curl --location "http://localhost:3000/groups/<GROUP_ID>/goals?memberId=<ALICE_MEMBERSHIP_ID>" \
+  --header "Authorization: Bearer <BOB_TOKEN>"
+
+# 11) PATCH Alice's COUNT goal (rename + adjust target)
+curl --location --request PATCH http://localhost:3000/goals/<ALICE_COUNT_GOAL_ID> \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Read more pages",
+    "per_day_target": 25
+  }'
+
+# 12) PATCH Alice's BINARY goal (rename only — unit/target not allowed)
+curl --location --request PATCH http://localhost:3000/goals/<ALICE_BINARY_GOAL_ID> \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "name": "Meditate (breathing)"
+  }'
+
+# -------- Optional NEGATIVE checks (good to verify validation) --------
+
+# N1) Bob tries to create a goal under Alice's membership → should 403
+curl --location --request POST http://localhost:3000/memberships/<ALICE_MEMBERSHIP_ID>/goals \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <BOB_TOKEN>" \
+  --data-raw '{
+    "name": "Should fail",
+    "type": "binary"
+  }'
+
+# N2) Alice tries to PATCH binary goal with unit → should 400
+curl --location --request PATCH http://localhost:3000/goals/<ALICE_BINARY_GOAL_ID> \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "unit": "mins"
+  }'
+
+# N3) Alice tries to PATCH count goal to invalid per_day_target → should 400
+curl --location --request PATCH http://localhost:3000/goals/<ALICE_COUNT_GOAL_ID> \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer <ALICE_TOKEN>" \
+  --data-raw '{
+    "per_day_target": 0
+  }'

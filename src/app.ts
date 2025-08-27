@@ -12,8 +12,6 @@ import groupsRouter from "./routes/groupsRouter";
 import membershipsRouter from "./routes/membershipRouter";
 import invitesRouter from "./routes/invitesRouter";
 
-
-
 dotenv.config();
 
 const app = express();
@@ -30,6 +28,7 @@ app.use(logsRouter);
 app.use(groupsRouter);
 app.use(membershipsRouter);
 app.use(invitesRouter);
+app.use(goalRouter);
 
 // error handler LAST
 app.use(errorHandler);
