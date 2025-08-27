@@ -1,0 +1,16 @@
+# ============================================
+# GROUP OVERVIEW + ACTIVITY (Read Models)
+# Base URL: http://localhost:3000
+# ============================================
+
+# 1) OVERVIEW — last 7 days window (auto-clamped to group dates)
+curl --location "http://localhost:3000/groups/<GROUP_ID>/overview?days=7" \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 2) OVERVIEW — last 30 days window
+curl --location "http://localhost:3000/groups/<GROUP_ID>/overview?days=30" \
+  --header "Authorization: Bearer <ALICE_TOKEN>"
+
+# 3) ACTIVITY — recent 20 changes across the group
+curl --location "http://localhost:3000/groups/<GROUP_ID>/activity?limit=20" \
+  --header "Authorization: Bearer <ALICE_TOKEN>"

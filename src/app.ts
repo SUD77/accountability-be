@@ -11,6 +11,7 @@ import groupsRouter from "./routes/groupsRouter";
 import membershipsRouter from "./routes/membershipRouter";
 import invitesRouter from "./routes/invitesRouter";
 import logEntriesRouter from "./routes/logEntriesRouter";
+import groupViewsRouter from "./routes/groupViewsRouter";
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use(membershipsRouter);
 app.use(invitesRouter);
 app.use(goalRouter);
 app.use(logEntriesRouter);
+app.use(groupViewsRouter);
 
 // error handler LAST
 app.use(errorHandler);
